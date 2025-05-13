@@ -1,0 +1,47 @@
+# spartan_ai_config.yaml
+mode: offline                        # Operating mode: 'offline' or 'online'
+allow_external_api: false            # Allow using external APIs (e.g., GPT) if true
+external_api_key: ""                 # (Optional) API key for external GPT usage
+external_api_model: "gpt-4"          # (Optional) External model name to use (if allowed)
+
+fallback_order:                      # Ordered list of agent keys for fallback strategy
+  - main                             # Primary agent (could be external if allow_external_api is true)
+  - local                            # Fallback to local agent if primary fails or offline mode
+
+max_retries: 3                       # Max retry attempts for a failed operation
+retry_backoff: 2                     # Backoff factor (in seconds) between retries
+
+# Define agent configurations (name, model, type, and enabled status)
+agents:
+  main:
+    model: "gpt-4"                   # Primary model (external API)
+    type: "external"                 # 'external' indicates uses cloud API (OpenAI GPT-4 in this case)
+    enabled: true
+  local:
+    model: "ggml-gpt4all.bin"        # Local model or resource path for offline fallback
+    type: "local"                    # 'local' indicates offline model
+    enabled: true
+  finance:
+    model: "finance-model.bin"       # Example specialized local model for finance domain
+    type: "local"
+    enabled: true
+
+# Mapping from detected context domain to which agent to use
+domain_map:
+  finance: finance                   # Use the 'finance' agent for finance-related content
+  tech: main                         # Use primary agent for tech domain
+  default: main                      # Default agent if no specific domain match
+
+urgent_agent: local                  # If a prompt is marked urgent, route to this agent (e.g., local for speed)
+
+# Feature toggles for optional modules (default disabled for safety/offline readiness)
+enable_self_expansion_engine: false  # Self-Expansion Engine (disabled by default)
+enable_api_key_rotator: false        # API Key Rotator (disabled by default)
+enable_honeypot_system: false        # Honeypot System (disabled by default)
+
+# Requirements for multimedia support (for diagnostics to verify)
+audio_support_required: false        # If true, ensure audio generation/playback support is available
+video_support_required: false        # If true, ensure video generation support is available
+
+log_level: INFO                      # Default logging level for all modules
+log_dir: "logs"                      # Directory for log files

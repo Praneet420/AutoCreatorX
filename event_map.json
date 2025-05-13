@@ -1,0 +1,39 @@
+{
+    "failure": {
+      "action": "invoke_self_heal_cron",        // Run self-healing process
+      "notify": true,
+      "severity": "high",
+      "message": "System failure detected. Initiating self-healing routine."
+    },
+    "success": {
+      "action": "log_event",
+      "notify": false,
+      "severity": "low",
+      "message": "Operation succeeded."
+    },
+    "anomaly": {
+      "action": "flag_for_review",
+      "notify": true,
+      "severity": "medium",
+      "message": "Anomaly detected. Flagging for manual review."
+    },
+    "toxic_input": {
+      "action": "flag_and_deflect",
+      "notify": true,
+      "severity": "high",
+      "message": "Toxic input detected. Neutralizing content and requiring override."
+    },
+    "agent_disabled": {
+      "action": "log_event",
+      "notify": true,
+      "severity": "medium",
+      "message": "An agent was automatically disabled due to poor performance."
+    },
+    "resource_issue": {
+      "action": "invoke_self_heal_cron",
+      "notify": true,
+      "severity": "high",
+      "message": "Resource issue detected (low system health). Initiating maintenance."
+    }
+  }
+  

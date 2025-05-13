@@ -1,0 +1,30 @@
+# Core
+python-dotenv==1.0.0
+argparse
+fastapi==0.110.0
+uvicorn==0.27.0
+jinja2==3.1.3
+
+# AI/NLP
+transformers==4.45.0
+torch==2.3.0
+accelerate==0.30.0
+sentence-transformers==2.6.1
+langchain==0.2.0
+
+# Video/Audio
+moviepy==1.0.3
+pydub==0.25.1
+audiocraft==1.2.0
+
+# Platform APIs
+google-api-python-client==2.120.0
+tiktok-api==1.4.2
+python-instagram==1.3.2
+
+# Utilities
+psutil==5.9.8
+cryptography==42.0.5
+selenium==4.20.0
+watchdog==4.0.0
+streamlit==1.35.0

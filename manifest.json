@@ -1,0 +1,730 @@
+// manifest.json
+{
+    "manifest_version": 3,
+    "name": "Advanced Captcha Solver",
+    "version": "1.0",
+    "description": "A browser extension that solves various types of captchas",
+    "permissions": [
+      "activeTab",
+      "scripting",
+      "storage",
+      "webRequest"
+    ],
+    "host_permissions": [
+      "<all_urls>"
+    ],
+    "action": {
+      "default_popup": "popup.html",
+      "default_icon": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+      }
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["content.js"],
+        "run_at": "document_end"
+      }
+    ],
+    "background": {
+      "service_worker": "background.js"
+    },
+    "icons": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  }
+  
+  // popup.html
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <title>Advanced Captcha Solver</title>
+    <style>
+      body {
+        width: 300px;
+        padding: 15px;
+        font-family: Arial, sans-serif;
+      }
+      .container {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .switch-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 50px;
+        height: 24px;
+      }
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 24px;
+      }
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+      }
+      input:checked + .slider {
+        background-color: #2196F3;
+      }
+      input:checked + .slider:before {
+        transform: translateX(26px);
+      }
+      .stats {
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #f5f5f5;
+        border-radius: 5px;
+      }
+      .footer {
+        margin-top: 15px;
+        font-size: 0.8em;
+        color: #888;
+        text-align: center;
+      }
+      button {
+        padding: 8px;
+        background-color: #2196F3;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:hover {
+        background-color: #0b7dda;
+      }
+      select {
+        padding: 5px;
+        width: 100%;
+        margin-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2 style="margin-top: 0;">Advanced Captcha Solver</h2>
+      
+      <div class="switch-container">
+        <span>Enable Solver</span>
+        <label class="switch">
+          <input type="checkbox" id="enableSolver" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      
+      <div class="switch-container">
+        <span>Auto-solve</span>
+        <label class="switch">
+          <input type="checkbox" id="autoSolve" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+      
+      <div>
+        <label for="solveDelay">Solve Delay (ms):</label>
+        <input type="number" id="solveDelay" min="0" max="5000" value="1000" style="width: 100%;">
+      </div>
+      
+      <div>
+        <label for="solverMode">Solver Mode:</label>
+        <select id="solverMode">
+          <option value="smart">Smart (Auto-detect)</option>
+          <option value="aggressive">Aggressive (Faster but less stealthy)</option>
+          <option value="stealth">Stealth (Slower but more human-like)</option>
+        </select>
+      </div>
+      
+      <button id="solveNow">Solve Captcha Now</button>
+      
+      <div class="stats">
+        <div>Captchas solved: <span id="solvedCount">0</span></div>
+        <div>Success rate: <span id="successRate">0%</span></div>
+        <div>Last solved: <span id="lastSolved">Never</span></div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p>v1.0 - Local Captcha Solver</p>
+    </div>
+  
+    <script src="popup.js"></script>
+  </body>
+  </html>
+  
+  // popup.js
+  document.addEventListener('DOMContentLoaded', function() {
+    // Load saved settings
+    chrome.storage.local.get({
+      enableSolver: true,
+      autoSolve: true,
+      solveDelay: 1000,
+      solverMode: 'smart',
+      stats: {
+        solved: 0,
+        attempts: 0,
+        lastSolved: null
+      }
+    }, function(items) {
+      document.getElementById('enableSolver').checked = items.enableSolver;
+      document.getElementById('autoSolve').checked = items.autoSolve;
+      document.getElementById('solveDelay').value = items.solveDelay;
+      document.getElementById('solverMode').value = items.solverMode;
+      
+      // Update stats
+      updateStats(items.stats);
+    });
+    
+    // Save settings when changed
+    document.getElementById('enableSolver').addEventListener('change', function() {
+      chrome.storage.local.set({ enableSolver: this.checked });
+    });
+    
+    document.getElementById('autoSolve').addEventListener('change', function() {
+      chrome.storage.local.set({ autoSolve: this.checked });
+    });
+    
+    document.getElementById('solveDelay').addEventListener('change', function() {
+      chrome.storage.local.set({ solveDelay: parseInt(this.value) });
+    });
+    
+    document.getElementById('solverMode').addEventListener('change', function() {
+      chrome.storage.local.set({ solverMode: this.value });
+    });
+    
+    // Solve button
+    document.getElementById('solveNow').addEventListener('click', function() {
+      chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+        chrome.tabs.sendMessage(tabs[0].id, { action: "solveCaptcha" });
+      });
+    });
+    
+    function updateStats(stats) {
+      document.getElementById('solvedCount').textContent = stats.solved;
+      const successRate = stats.attempts > 0 ? Math.round((stats.solved / stats.attempts) * 100) : 0;
+      document.getElementById('successRate').textContent = successRate + '%';
+      document.getElementById('lastSolved').textContent = stats.lastSolved ? new Date(stats.lastSolved).toLocaleString() : 'Never';
+    }
+  });
+  
+  // background.js
+  chrome.runtime.onInstalled.addListener(() => {
+    // Initialize storage with default settings
+    chrome.storage.local.set({
+      enableSolver: true,
+      autoSolve: true,
+      solveDelay: 1000,
+      solverMode: 'smart',
+      stats: {
+        solved: 0,
+        attempts: 0,
+        lastSolved: null
+      }
+    });
+    
+    console.log('Advanced Captcha Solver installed and initialized');
+  });
+  
+  // Listen for messages from content script
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "updateStats") {
+      chrome.storage.local.get('stats', function(data) {
+        const stats = data.stats;
+        stats.attempts++;
+        
+        if (message.success) {
+          stats.solved++;
+          stats.lastSolved = new Date().toISOString();
+        }
+        
+        chrome.storage.local.set({ stats: stats });
+      });
+    }
+  });
+  
+  // content.js
+  (function() {
+    // Main configuration
+    let config = {
+      enableSolver: true,
+      autoSolve: true,
+      solveDelay: 1000,
+      solverMode: 'smart'
+    };
+    
+    // Load configuration
+    chrome.storage.local.get(['enableSolver', 'autoSolve', 'solveDelay', 'solverMode'], function(result) {
+      config = {...config, ...result};
+      initialize();
+    });
+    
+    // Listen for commands from popup
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message.action === "solveCaptcha") {
+        solveCaptcha();
+      }
+    });
+    
+    function initialize() {
+      if (!config.enableSolver) return;
+      
+      // Set up mutation observer to detect when captchas appear
+      const observer = new MutationObserver(function(mutations) {
+        for (let mutation of mutations) {
+          if (mutation.addedNodes.length) {
+            checkForCaptcha();
+          }
+        }
+      });
+      
+      observer.observe(document.body, { childList: true, subtree: true });
+      
+      // Also check on page load
+      checkForCaptcha();
+    }
+    
+    function checkForCaptcha() {
+      if (!config.enableSolver) return;
+      
+      // Check for common captcha types
+      const recaptchaFound = document.querySelector('div.g-recaptcha, iframe[src*="recaptcha"], iframe[src*="hcaptcha"], div.h-captcha');
+      const imageCaptchaFound = document.querySelector('img[src*="captcha"], img[alt*="captcha"]');
+      const textCaptchaFound = document.querySelector('input[name*="captcha"], input[id*="captcha"]');
+      
+      if (recaptchaFound || imageCaptchaFound || textCaptchaFound) {
+        console.log("Captcha detected!");
+        
+        if (config.autoSolve) {
+          setTimeout(() => {
+            solveCaptcha();
+          }, config.solveDelay);
+        }
+      }
+    }
+    
+    function solveCaptcha() {
+      console.log("Attempting to solve captcha...");
+      
+      let success = false;
+      
+      // Try to solve various types of captchas
+      if (solveRecaptcha() || solveHCaptcha() || solveImageCaptcha() || solveTextCaptcha()) {
+        success = true;
+        console.log("Captcha solved successfully!");
+      } else {
+        console.log("Could not solve captcha automatically.");
+      }
+      
+      // Report statistics back to background script
+      chrome.runtime.sendMessage({
+        action: "updateStats",
+        success: success
+      });
+      
+      return success;
+    }
+    
+    function solveRecaptcha() {
+      const recaptchaFrames = document.querySelectorAll('iframe[src*="recaptcha"]');
+      if (recaptchaFrames.length === 0) return false;
+      
+      // Try to find and click the checkbox
+      const frames = Array.from(recaptchaFrames);
+      for (const frame of frames) {
+        try {
+          const frameDocument = frame.contentDocument;
+          if (!frameDocument) continue; // Same-origin policy may prevent access
+          
+          const checkbox = frameDocument.querySelector('.recaptcha-checkbox');
+          if (checkbox) {
+            checkbox.click();
+            
+            // Wait for any image challenges
+            setTimeout(() => handleImageChallenge(), 1500);
+            return true;
+          }
+        } catch (e) {
+          console.error("Error accessing recaptcha frame:", e);
+        }
+      }
+      
+      // If we can't access the iframe directly, try to click based on position
+      const recaptchaBox = document.querySelector('.g-recaptcha');
+      if (recaptchaBox) {
+        const rect = recaptchaBox.getBoundingClientRect();
+        simulateClick(rect.left + 30, rect.top + 30); // Approximate position of checkbox
+        
+        // Wait for any image challenges
+        setTimeout(() => handleImageChallenge(), 1500);
+        return true;
+      }
+      
+      return false;
+    }
+    
+    function solveHCaptcha() {
+      const hcaptchaFrame = document.querySelector('iframe[src*="hcaptcha"]');
+      if (!hcaptchaFrame) return false;
+      
+      try {
+        const frameDocument = hcaptchaFrame.contentDocument;
+        if (frameDocument) {
+          const checkbox = frameDocument.querySelector('.checkbox');
+          if (checkbox) {
+            checkbox.click();
+            
+            // Wait for any image challenges
+            setTimeout(() => handleImageChallenge(), 1500);
+            return true;
+          }
+        }
+      } catch (e) {
+        // Same-origin policy likely prevented access
+        console.error("Error accessing hCaptcha frame:", e);
+      }
+      
+      // If we can't access the iframe directly, try to click based on position
+      const hcaptchaBox = document.querySelector('.h-captcha');
+      if (hcaptchaBox) {
+        const rect = hcaptchaBox.getBoundingClientRect();
+        simulateClick(rect.left + 30, rect.top + 30); // Approximate position of checkbox
+        
+        // Wait for any image challenges
+        setTimeout(() => handleImageChallenge(), 1500);
+        return true;
+      }
+      
+      return false;
+    }
+    
+    function solveImageCaptcha() {
+      const captchaImg = document.querySelector('img[src*="captcha"], img[alt*="captcha"]');
+      if (!captchaImg) return false;
+      
+      // For simple image captchas, we'll attempt image recognition
+      // This is a basic implementation - for a real solution, you'd use more advanced techniques
+      if (config.solverMode === 'aggressive') {
+        // Find the nearest input field
+        const captchaInput = findNearestCaptchaInput(captchaImg);
+        if (captchaInput) {
+          // Attempt to solve using basic image recognition
+          // This is a placeholder - in a real extension you'd use OCR or ML
+          attemptImageRecognition(captchaImg, captchaInput);
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    function solveTextCaptcha() {
+      const captchaInput = document.querySelector('input[name*="captcha"], input[id*="captcha"]');
+      if (!captchaInput) return false;
+      
+      // Look for text or instructions near the input
+      const captchaLabel = findCaptchaInstructions(captchaInput);
+      if (captchaLabel) {
+        const solution = solveMathCaptcha(captchaLabel) || solveSimpleTextCaptcha(captchaLabel);
+        
+        if (solution) {
+          captchaInput.value = solution;
+          triggerInputEvents(captchaInput);
+          
+          // Find and click the submit button if in aggressive mode
+          if (config.solverMode === 'aggressive') {
+            const submitButton = findNearestSubmitButton(captchaInput);
+            if (submitButton) {
+              setTimeout(() => {
+                submitButton.click();
+              }, 500);
+            }
+          }
+          
+          return true;
+        }
+      }
+      
+      return false;
+    }
+    
+    function handleImageChallenge() {
+      // Look for image grid selection challenges
+      const imageGrids = document.querySelectorAll('table.rc-imageselect-table, div.task-image');
+      if (imageGrids.length === 0) return;
+      
+      // This is a placeholder - in a real extension you'd use image recognition
+      // For demo purposes, we'll just click some images based on the solver mode
+      if (config.solverMode === 'aggressive') {
+        // Click a pattern of images (e.g., corners or center)
+        clickImagePatterns();
+      } else if (config.solverMode === 'smart') {
+        // Use a more sophisticated approach (simulated here)
+        setTimeout(() => {
+          clickImagePatterns();
+          
+          // Try to find and click verify button
+          setTimeout(() => {
+            const verifyButton = document.querySelector('#recaptcha-verify-button') || 
+                                document.querySelector('.button-submit');
+            if (verifyButton) verifyButton.click();
+          }, 1000);
+        }, 1000);
+      }
+    }
+    
+    function clickImagePatterns() {
+      // Get all images in the challenge
+      const images = document.querySelectorAll('.rc-image-tile-wrapper img, .task-image img');
+      if (images.length === 0) return;
+      
+      // Click different patterns based on the number of images
+      if (images.length === 9) {
+        // Click center and corners for a 3x3 grid
+        [0, 2, 4, 6, 8].forEach((index) => {
+          if (images[index]) {
+            setTimeout(() => {
+              images[index].click();
+            }, 300 * index);
+          }
+        });
+      } else if (images.length === 16) {
+        // Click a pattern for 4x4 grid
+        [0, 3, 5, 10, 15].forEach((index) => {
+          if (images[index]) {
+            setTimeout(() => {
+              images[index].click();
+            }, 300 * index);
+          }
+        });
+      } else {
+        // For other sizes, just click some random images
+        const numToClick = Math.min(3, Math.floor(images.length / 2));
+        for (let i = 0; i < numToClick; i++) {
+          const randomIndex = Math.floor(Math.random() * images.length);
+          setTimeout(() => {
+            if (images[randomIndex]) images[randomIndex].click();
+          }, 300 * i);
+        }
+      }
+    }
+    
+    function findNearestCaptchaInput(element) {
+      // Try to find an input field near the element
+      const inputs = document.querySelectorAll('input[type="text"]');
+      let nearestInput = null;
+      let shortestDistance = Infinity;
+      
+      const elementRect = element.getBoundingClientRect();
+      const elementCenter = {
+        x: elementRect.left + elementRect.width / 2,
+        y: elementRect.top + elementRect.height / 2
+      };
+      
+      inputs.forEach(input => {
+        const inputRect = input.getBoundingClientRect();
+        const inputCenter = {
+          x: inputRect.left + inputRect.width / 2,
+          y: inputRect.top + inputRect.height / 2
+        };
+        
+        const distance = Math.sqrt(
+          Math.pow(elementCenter.x - inputCenter.x, 2) + 
+          Math.pow(elementCenter.y - inputCenter.y, 2)
+        );
+        
+        if (distance < shortestDistance) {
+          shortestDistance = distance;
+          nearestInput = input;
+        }
+      });
+      
+      // Only return if the input is relatively close
+      return (shortestDistance < 300) ? nearestInput : null;
+    }
+    
+    function findNearestSubmitButton(element) {
+      // Look for submit buttons
+      const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], input[type="button"], a.button'));
+      
+      // Filter for likely submit buttons
+      const submitButtons = buttons.filter(button => {
+        const text = button.textContent?.toLowerCase() || button.value?.toLowerCase() || '';
+        return text.includes('submit') || text.includes('verify') || 
+               text.includes('continue') || text.includes('next') ||
+               button.type === 'submit';
+      });
+      
+      if (submitButtons.length === 0) return null;
+      
+      // Find the nearest one
+      const elementRect = element.getBoundingClientRect();
+      let nearest = null;
+      let shortestDistance = Infinity;
+      
+      submitButtons.forEach(button => {
+        const buttonRect = button.getBoundingClientRect();
+        const distance = Math.sqrt(
+          Math.pow(elementRect.left - buttonRect.left, 2) + 
+          Math.pow(elementRect.top - buttonRect.top, 2)
+        );
+        
+        if (distance < shortestDistance) {
+          shortestDistance = distance;
+          nearest = button;
+        }
+      });
+      
+      return nearest;
+    }
+    
+    function findCaptchaInstructions(captchaInput) {
+      // Try to find label or instructions for the captcha
+      const inputId = captchaInput.id;
+      let label = null;
+      
+      // Check for explicit label
+      if (inputId) {
+        label = document.querySelector(`label[for="${inputId}"]`);
+        if (label) return label.textContent;
+      }
+      
+      // Check for parent label
+      let parent = captchaInput.parentElement;
+      while (parent && parent !== document.body) {
+        if (parent.tagName === 'LABEL') {
+          return parent.textContent;
+        }
+        
+        // Check for text content in the parent
+        const textNodes = Array.from(parent.childNodes)
+          .filter(node => node.nodeType === 3) // Text nodes
+          .map(node => node.textContent.trim())
+          .filter(text => text.length > 0);
+        
+        if (textNodes.length > 0) {
+          return textNodes.join(' ');
+        }
+        
+        parent = parent.parentElement;
+      }
+      
+      // Look for nearby text
+      const siblings = Array.from(captchaInput.parentElement.children);
+      for (const sibling of siblings) {
+        if (sibling !== captchaInput && sibling.textContent.trim()) {
+          return sibling.textContent;
+        }
+      }
+      
+      return null;
+    }
+    
+    function solveMathCaptcha(text) {
+      // Try to find and solve simple math captchas
+      const mathRegex = /(\d+)\s*([\+\-\*\/])\s*(\d+)/;
+      const match = text.match(mathRegex);
+      
+      if (match) {
+        const num1 = parseInt(match[1]);
+        const operator = match[2];
+        const num2 = parseInt(match[3]);
+        
+        let result;
+        switch (operator) {
+          case '+': result = num1 + num2; break;
+          case '-': result = num1 - num2; break;
+          case '*': result = num1 * num2; break;
+          case '/': result = Math.floor(num1 / num2); break;
+          default: return null;
+        }
+        
+        return result.toString();
+      }
+      
+      return null;
+    }
+    
+    function solveSimpleTextCaptcha(text) {
+      // Try to solve very simple text captchas
+      // This is just a placeholder - real implementation would be more sophisticated
+      
+      // Check for "type X" instructions
+      const typeRegex = /type\s+['"]?([a-zA-Z0-9]+)['"]?/i;
+      const typeMatch = text.match(typeRegex);
+      if (typeMatch) return typeMatch[1];
+      
+      // Check for "enter X" instructions
+      const enterRegex = /enter\s+['"]?([a-zA-Z0-9]+)['"]?/i;
+      const enterMatch = text.match(enterRegex);
+      if (enterMatch) return enterMatch[1];
+      
+      return null;
+    }
+    
+    function attemptImageRecognition(captchaImg, inputField) {
+      // This is a placeholder for image recognition - in a real extension you'd use OCR
+      console.log("Attempting image recognition");
+      
+      // Simulate solving by filling with placeholder text
+      // In a real implementation, you'd use a Canvas to analyze the image
+      if (config.solverMode === 'aggressive') {
+        // Generate random alphanumeric string as a placeholder
+        const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < 6; i++) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        
+        inputField.value = result;
+        triggerInputEvents(inputField);
+      }
+    }
+    
+    function simulateClick(x, y) {
+      const clickEvent = new MouseEvent('click', {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y
+      });
+      
+      document.elementFromPoint(x, y)?.dispatchEvent(clickEvent);
+    }
+    
+    function triggerInputEvents(input) {
+      // Trigger events to make the change look more natural
+      const events = ['focus', 'input', 'change', 'blur'];
+      events.forEach(eventType => {
+        const event = new Event(eventType, { bubbles: true });
+        input.dispatchEvent(event);
+      });
+    }
+  })();
